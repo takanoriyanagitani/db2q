@@ -1,0 +1,49 @@
+syntax = "proto3";
+
+package db2q.proto.queue.v1;
+
+import "google/protobuf/timestamp.proto";
+
+message Uuid {
+  fixed64 hi = 1;
+  fixed64 lo = 2;
+}
+
+message QSvc {
+  message PushBackRequest {
+    Uuid request_id = 1;
+    Uuid topic_id = 2;
+    bytes value = 3;
+  }
+  message PushBackResponse {
+    google.protobuf.Timestamp pushed = 1;
+  }
+
+  message PopFrontRequest {
+    Uuid request_id = 1;
+    Uuid topic_id = 2;
+  }
+  message PopFrontResponse {
+    google.protobuf.Timestamp popped = 1;
+    bytes value = 2;
+  }
+}
+
+message TopicSvc {
+  message CreateRequest {
+    Uuid request_id = 1;
+    Uuid topic_id = 2;
+  }
+  message CreateResponse {
+    google.protobuf.Timestamp created = 1;
+  }
+}
+
+service TopicService {
+  rpc Create(TopicSvc.CreateRequest) returns (TopicSvc.CreateResponse);
+}
+
+service QueueService {
+  rpc PushBack(QSvc.PushBackRequest) returns (QSvc.PushBackResponse);
+  rpc PopFront(QSvc.PopFrontRequest) returns (QSvc.PopFrontResponse);
+}

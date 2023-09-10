@@ -1,0 +1,42 @@
+[package]
+name = "db2q"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.uuid]
+version = "1.4"
+optional = true
+features = [
+	"v4",
+]
+
+[dependencies.prost]
+version = "0.12"
+
+[dependencies.prost-types]
+version = "0.12"
+
+[dependencies.tonic]
+version = "0.10"
+default-features = false
+features = [
+	"transport",
+	"codegen",
+	"prost",
+]
+
+[build-dependencies.tonic-build]
+version = "0.10"
+default-features = false
+features = [
+	"prost",
+]
+
+[features]
+uv4 = [
+	"uuid",
+]
+
+default = [
+	"uv4",
+]
