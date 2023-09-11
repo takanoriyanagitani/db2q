@@ -10,33 +10,21 @@ path = "../.."
 
 [dependencies.tonic]
 version = "0.10"
+default-features = false
 features = [
-    "codegen",
+    "transport",
 ]
 
-[dependencies.async-trait]
-version = "0.1.13"
+[dependencies.deadpool]
+version = "0.9"
+default-features = false
+features = [
+    "managed",
+]
 
 [dependencies.deadpool-postgres]
 version = "0.10"
 default-features = false
 features = [
     "rt_tokio_1",
-]
-
-[dependencies.tokio-postgres]
-version = "0.7"
-optional = true
-default-features = false
-features = [
-    "runtime",
-]
-
-[features]
-default = [
-    "tpostgres",
-]
-
-tpostgres = [
-    "tokio-postgres",
 ]

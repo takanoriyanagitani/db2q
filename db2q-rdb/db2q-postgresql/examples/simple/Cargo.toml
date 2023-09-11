@@ -1,0 +1,14 @@
+[package]
+name = "simple"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies.db2q-postgresql]
+path = "../.."
+
+[dependencies.tokio]
+version = "1"
+features = [
+	"rt-multi-thread",
+	"macros",
+]

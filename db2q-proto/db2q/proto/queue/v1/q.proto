@@ -37,10 +37,19 @@ message TopicSvc {
   message CreateResponse {
     google.protobuf.Timestamp created = 1;
   }
+
+  message DropRequest {
+    Uuid request_id = 1;
+    Uuid topic_id = 2;
+  }
+  message DropResponse {
+    google.protobuf.Timestamp dropped = 1;
+  }
 }
 
 service TopicService {
   rpc Create(TopicSvc.CreateRequest) returns (TopicSvc.CreateResponse);
+  rpc Drop(TopicSvc.DropRequest) returns (TopicSvc.DropResponse);
 }
 
 service QueueService {
