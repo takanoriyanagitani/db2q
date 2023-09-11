@@ -11,6 +11,7 @@ use tokio_postgres::{Config, NoTls};
 
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 
+use db2q_postgresql::queue_service_server::QueueServiceServer;
 use db2q_postgresql::topic_service_server::TopicServiceServer;
 
 #[tokio::main]
@@ -45,8 +46,12 @@ async fn main() -> Result<(), String> {
     let topic_svc = db2q_postgresql::topic::minimal::svc::topic_svc_new(&pool, t2t);
     let topic_svr: TopicServiceServer<_> = TopicServiceServer::new(topic_svc);
 
+    let t2t = db2q_postgresql::topic::minimal::topic2table::topic2table_prefix_default();
+    let queue_svc = db2q_postgresql::queue::minimal::svc::queue_svc_new(&pool, t2t);
+    let queue_svr: QueueServiceServer<_> = QueueServiceServer::new(queue_svc);
+
     let mut sv: Server = Server::builder();
-    let router: Router<_> = sv.add_service(topic_svr);
+    let router: Router<_> = sv.add_service(topic_svr).add_service(queue_svr);
 
     router
         .serve(listen)
