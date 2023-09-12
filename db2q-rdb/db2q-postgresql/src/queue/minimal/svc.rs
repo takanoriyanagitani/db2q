@@ -5,9 +5,11 @@ use tonic::{Request, Response, Status};
 use deadpool::managed::PoolError;
 use deadpool_postgres::{Client, GenericClient, Pool};
 
+use db2q::queue::cmd::count::CountReq;
 use db2q::queue::cmd::push::PushBackReq;
 use db2q::uuid::Uuid;
 
+use db2q::db2q::proto::queue::v1::q_svc::{CountRequest, CountResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{PopFrontRequest, PopFrontResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{PushBackRequest, PushBackResponse};
 use db2q::db2q::proto::queue::v1::queue_service_server::QueueService;
@@ -49,6 +51,30 @@ impl<T> Svc<T> {
                 _ => Status::internal(format!("Unable to insert: {e}")),
             })
     }
+
+    async fn count<C>(&self, checked_name: &str, client: &C) -> Result<u64, Status>
+    where
+        C: GenericClient,
+    {
+        let query = format!(
+            r#"
+                SELECT
+                    COUNT(*) AS cnt
+                FROM {checked_name}
+            "#
+        );
+        let row = client
+            .query_one(&query, &[])
+            .await
+            .map_err(|e| match e.is_closed() {
+                true => Status::unavailable(format!("connection closed: {e}")),
+                _ => Status::internal(format!("Unable to insert: {e}")),
+            })?;
+        let cnt: i64 = row
+            .try_get(0)
+            .map_err(|e| Status::internal(format!("No column got: {e}")))?;
+        Ok(cnt as u64)
+    }
 }
 
 #[tonic::async_trait]
@@ -81,6 +107,17 @@ where
         Err(Status::unimplemented(
             "No plan to pop(delete) a queue(row) from a table for now",
         ))
+    }
+
+    async fn count(&self, req: Request<CountRequest>) -> Result<Response<CountResponse>, Status> {
+        let cr: CountRequest = req.into_inner();
+        let checked: CountReq = cr.try_into()?;
+        let topic_id: Uuid = checked.as_topic_id();
+        let name: String = self.topic2table.id2name(topic_id);
+        let client: Client = self.get_client().await?;
+        let cnt: u64 = self.count(&name, &client).await?;
+        let reply = CountResponse { count: cnt };
+        Ok(Response::new(reply))
     }
 }
 

@@ -64,6 +64,26 @@ tpush(){
 		db2q.proto.queue.v1.QueueService/PushBack
 }
 
+tcount(){
+	jq -n -c '{
+		request_id: {
+			hi: 20230911,
+			lo: 092555,
+		},
+		topic_id: {
+			hi: 3776,
+			lo:  599,
+		},
+	}' |
+	grpcurl \
+		-plaintext \
+		-d @ \
+		-import-path "${protodir}" \
+		-proto db2q/proto/queue/v1/q.proto \
+		"${listen_addr}" \
+		db2q.proto.queue.v1.QueueService/Count
+}
+
 tdrop
 tcreate
 tdrop
@@ -71,3 +91,6 @@ tdrop
 
 tcreate
 tpush
+tpush
+tpush
+tcount
