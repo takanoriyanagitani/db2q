@@ -24,6 +24,12 @@ impl Uuid {
         let raw: u128 = (h << 64) | l;
         Self { raw }
     }
+
+    pub fn split(&self) -> (u64, u64) {
+        let hi: u128 = self.raw >> 64;
+        let lo: u128 = self.raw & 0xffff_ffff_ffff_ffff;
+        (hi as u64, lo as u64)
+    }
 }
 
 impl fmt::Display for Uuid {
@@ -54,5 +60,18 @@ impl UuidLike for queue::v1::Uuid {
     }
     fn as_lo(&self) -> u64 {
         self.lo
+    }
+}
+
+impl From<Uuid> for queue::v1::Uuid {
+    fn from(d: Uuid) -> Self {
+        let (hi, lo) = d.split();
+        Self { hi, lo }
+    }
+}
+
+impl From<u128> for Uuid {
+    fn from(raw: u128) -> Self {
+        Self { raw }
     }
 }

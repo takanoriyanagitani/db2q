@@ -8,12 +8,22 @@ edition = "2021"
 [dependencies.db2q]
 path = "../.."
 
+[dependencies.futures-util]
+version = "0.3.28"
+default-features = false
+features = [
+]
+
 [dependencies.tonic]
 version = "0.10"
 default-features = false
 features = [
     "transport",
 ]
+
+[dependencies.tonic-types]
+version = "0.10"
+default-features = false
 
 [dependencies.deadpool]
 version = "0.9"

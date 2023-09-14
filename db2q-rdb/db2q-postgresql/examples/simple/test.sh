@@ -23,6 +23,26 @@ tcreate(){
 		db2q.proto.queue.v1.TopicService/Create
 }
 
+tcreate2(){
+	jq -n -c '{
+		request_id: {
+			hi: 20230914,
+			lo: 091625,
+		},
+		topic_id: {
+			hi: 634,
+			lo: 333,
+		},
+	}' |
+	grpcurl \
+		-plaintext \
+		-d @ \
+		-import-path "${protodir}" \
+		-proto db2q/proto/queue/v1/q.proto \
+		"${listen_addr}" \
+		db2q.proto.queue.v1.TopicService/Create
+}
+
 tdrop(){
 	jq -n -c '{
 		request_id: {
@@ -84,13 +104,31 @@ tcount(){
 		db2q.proto.queue.v1.QueueService/Count
 }
 
+tlist(){
+	jq -n -c '{
+		request_id: {
+			hi: 20230914,
+			lo: 091327,
+		},
+	}' |
+	grpcurl \
+		-plaintext \
+		-d @ \
+		-import-path "${protodir}" \
+		-proto db2q/proto/queue/v1/q.proto \
+		"${listen_addr}" \
+		db2q.proto.queue.v1.TopicService/List
+}
+
 tdrop
 tcreate
 tdrop
 tdrop
 
 tcreate
+tcreate2
 tpush
 tpush
 tpush
 tcount
+tlist
