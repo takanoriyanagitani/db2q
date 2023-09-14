@@ -120,6 +120,27 @@ tlist(){
 		db2q.proto.queue.v1.TopicService/List
 }
 
+qnext(){
+	jq -n -c '{
+		request_id: {
+			hi: 20230911,
+			lo: 092555,
+		},
+		topic_id: {
+			hi: 3776,
+			lo:  599,
+		},
+		previous: 2,
+	}' |
+	grpcurl \
+		-plaintext \
+		-d @ \
+		-import-path "${protodir}" \
+		-proto db2q/proto/queue/v1/q.proto \
+		"${listen_addr}" \
+		db2q.proto.queue.v1.QueueService/Next
+}
+
 tdrop
 tcreate
 tdrop
@@ -132,3 +153,4 @@ tpush
 tpush
 tcount
 tlist
+qnext
