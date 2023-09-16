@@ -1,5 +1,7 @@
 use core::fmt;
 
+use tonic::Status;
+
 use crate::db2q::proto::queue;
 
 #[derive(Clone, Copy)]
@@ -73,5 +75,16 @@ impl From<Uuid> for queue::v1::Uuid {
 impl From<u128> for Uuid {
     fn from(raw: u128) -> Self {
         Self { raw }
+    }
+}
+
+impl<T> TryFrom<Option<&T>> for Uuid
+where
+    T: UuidLike,
+{
+    type Error = Status;
+    fn try_from(ot: Option<&T>) -> Result<Self, Self::Error> {
+        let t: &T = ot.ok_or_else(|| Status::invalid_argument("uuid missing"))?;
+        Ok(Self::new(t.as_hi(), t.as_lo()))
     }
 }

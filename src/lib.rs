@@ -11,4 +11,6 @@ pub mod db2q {
 pub mod uuid;
 
 pub mod queue;
+
+pub mod count;
 pub mod topic;

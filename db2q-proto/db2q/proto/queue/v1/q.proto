@@ -86,3 +86,17 @@ service QueueService {
   rpc Count(QSvc.CountRequest) returns (QSvc.CountResponse);
   rpc Next(QSvc.NextRequest) returns (QSvc.NextResponse);
 }
+
+message CntSvc {
+  message ExactRequest {
+    Uuid request_id = 1;
+    Uuid topic_id = 2;
+  }
+  message ExactResponse {
+    fixed64 count = 1;
+  }
+}
+
+service CountService {
+  rpc Exact(CntSvc.ExactRequest) returns (CntSvc.ExactResponse);
+}

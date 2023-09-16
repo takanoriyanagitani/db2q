@@ -15,6 +15,7 @@ use tokio_postgres::{Config, NoTls};
 
 use deadpool_postgres::{Manager, ManagerConfig, Pool, RecyclingMethod};
 
+use db2q_postgresql::count_service_server::CountServiceServer;
 use db2q_postgresql::queue_service_server::QueueServiceServer;
 use db2q_postgresql::topic_service_server::TopicServiceServer;
 
@@ -51,6 +52,10 @@ async fn main() -> Result<(), String> {
     let topic_svr: TopicServiceServer<_> = TopicServiceServer::new(topic_svc);
 
     let t2t = db2q_postgresql::topic::minimal::topic2table::topic2table_prefix_default();
+    let count_svc = db2q_postgresql::count::minimal::svc::count_svc_new(&pool, t2t);
+    let count_svr: CountServiceServer<_> = CountServiceServer::new(count_svc);
+
+    let t2t = db2q_postgresql::topic::minimal::topic2table::topic2table_prefix_default();
     let queue_svc = db2q_postgresql::queue::minimal::svc::queue_svc_new(&pool, t2t);
     let aqsvc: Arc<_> = Arc::new(queue_svc);
 
@@ -63,7 +68,10 @@ async fn main() -> Result<(), String> {
         .map_err(|e| format!("Unable to make writable queue: {e}"))?;
 
     let mut sv: Server = Server::builder();
-    let router: Router<_> = sv.add_service(topic_svr).add_service(queue_svr);
+    let router: Router<_> = sv
+        .add_service(topic_svr)
+        .add_service(queue_svr)
+        .add_service(count_svr);
 
     router
         .serve(listen)
