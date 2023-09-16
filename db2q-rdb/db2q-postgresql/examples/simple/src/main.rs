@@ -1,8 +1,12 @@
 use std::env;
 use std::net::SocketAddr;
+use std::sync::Arc;
 
 use db2q_postgresql::deadpool_postgres;
 use db2q_postgresql::tonic;
+
+use db2q_postgresql::db2q::queue::rw::svc::rw_q_svc_new;
+use db2q_postgresql::db2q::queue::rw::svc::RwQueueSvc;
 
 use tonic::transport::{server::Router, Server};
 
@@ -48,7 +52,15 @@ async fn main() -> Result<(), String> {
 
     let t2t = db2q_postgresql::topic::minimal::topic2table::topic2table_prefix_default();
     let queue_svc = db2q_postgresql::queue::minimal::svc::queue_svc_new(&pool, t2t);
-    let queue_svr: QueueServiceServer<_> = QueueServiceServer::new(queue_svc);
+    let aqsvc: Arc<_> = Arc::new(queue_svc);
+
+    let rw_q_svc: RwQueueSvc<_> = rw_q_svc_new(&aqsvc);
+    let queue_svr: QueueServiceServer<_> = QueueServiceServer::new(rw_q_svc.clone());
+
+    rw_q_svc
+        .make_writable()
+        .await
+        .map_err(|e| format!("Unable to make writable queue: {e}"))?;
 
     let mut sv: Server = Server::builder();
     let router: Router<_> = sv.add_service(topic_svr).add_service(queue_svr);

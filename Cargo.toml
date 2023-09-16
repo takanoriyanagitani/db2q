@@ -10,11 +10,24 @@ features = [
 	"v4",
 ]
 
+[dependencies.log]
+version = "0.4"
+features = [
+]
+
 [dependencies.prost]
 version = "0.12"
 
 [dependencies.prost-types]
 version = "0.12"
+
+[dependencies.tokio]
+version = "1"
+default-features = false
+features = [
+	"sync",
+	"macros",
+]
 
 [dependencies.tonic]
 version = "0.10"
