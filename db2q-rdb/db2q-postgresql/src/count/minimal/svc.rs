@@ -6,7 +6,10 @@ use deadpool_postgres::{Client, GenericClient, Pool};
 use db2q::uuid::Uuid;
 
 use db2q::count::cmd::exact::ExactReq;
+use db2q::count::cmd::fast::FastReq;
+
 use db2q::db2q::proto::queue::v1::cnt_svc::{ExactRequest, ExactResponse};
+use db2q::db2q::proto::queue::v1::cnt_svc::{FastRequest, FastResponse};
 use db2q::db2q::proto::queue::v1::count_service_server::CountService;
 
 use crate::common::minimal::topic2table::Topic2Table;
@@ -42,12 +45,43 @@ impl<T> Svc<T> {
             .await
             .map_err(|e| match e.is_closed() {
                 true => Status::unavailable(format!("connection closed: {e}")),
-                _ => Status::internal(format!("Unable to insert: {e}")),
+                _ => Status::internal(format!("Unable to count: {e}")),
             })?;
         let cnt: i64 = row
             .try_get(0)
             .map_err(|e| Status::internal(format!("No column got: {e}")))?;
         Ok(cnt as u64)
+    }
+
+    pub async fn fast<C>(&self, checked_name: &str, client: &C) -> Result<u64, Status>
+    where
+        C: GenericClient,
+    {
+        let query = format!(
+            r#"
+                SELECT
+                    reltuples::BIGINT AS cnt_estimate
+                FROM pg_class
+                WHERE
+                    oid = 'public.{checked_name}'::REGCLASS
+            "#
+        );
+        let row = client
+            .query_one(&query, &[])
+            .await
+            .map_err(|e| match e.is_closed() {
+                true => Status::unavailable(format!("connection closed: {e}")),
+                _ => Status::internal(format!("Unable to get a count estimate: {e}")),
+            })?;
+        let cnt: i64 = row
+            .try_get(0)
+            .map_err(|e| Status::internal(format!("No column got: {e}")))?;
+        match cnt {
+            0.. => Ok(cnt as u64),
+            _ => Err(Status::not_found(format!(
+                "No estimate available for this table: {checked_name}"
+            ))),
+        }
     }
 }
 
@@ -64,6 +98,19 @@ where
         let client: Client = self.get_client().await?;
         let cnt: u64 = self.count(name.as_str(), &client).await?;
         let reply = ExactResponse { count: cnt };
+        Ok(Response::new(reply))
+    }
+
+    async fn fast(&self, req: Request<FastRequest>) -> Result<Response<FastResponse>, Status> {
+        let fr: FastRequest = req.into_inner();
+        let checked: FastReq = (&fr).try_into()?;
+        let topic_id: Uuid = checked.as_topic();
+        let name: String = self.topic2table.id2name(topic_id);
+        let client: Client = self.get_client().await?;
+        let cnt: u64 = self.fast(name.as_str(), &client).await?;
+        let reply = FastResponse {
+            count_estimate: cnt,
+        };
         Ok(Response::new(reply))
     }
 }

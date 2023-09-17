@@ -95,8 +95,17 @@ message CntSvc {
   message ExactResponse {
     fixed64 count = 1;
   }
+
+  message FastRequest {
+    Uuid request_id = 1;
+    Uuid topic_id = 2;
+  }
+  message FastResponse {
+    fixed64 count_estimate = 1;
+  }
 }
 
 service CountService {
   rpc Exact(CntSvc.ExactRequest) returns (CntSvc.ExactResponse);
+  rpc Fast(CntSvc.FastRequest) returns (CntSvc.FastResponse);
 }

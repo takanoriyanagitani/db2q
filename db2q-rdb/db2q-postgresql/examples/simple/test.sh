@@ -3,6 +3,8 @@
 listen_addr="127.0.0.1:9115"
 protodir="./db2q-proto"
 
+export PGUSER=postgres
+
 tcreate(){
 	jq -n -c '{
 		request_id: {
@@ -161,6 +163,26 @@ cexact(){
 		db2q.proto.queue.v1.CountService/Exact
 }
 
+cfast(){
+	jq -n -c '{
+		request_id: {
+			hi: 20230911,
+			lo: 092555,
+		},
+		topic_id: {
+			hi: 3776,
+			lo:  599,
+		},
+	}' |
+	grpcurl \
+		-plaintext \
+		-d @ \
+		-import-path "${protodir}" \
+		-proto db2q/proto/queue/v1/q.proto \
+		"${listen_addr}" \
+		db2q.proto.queue.v1.CountService/Fast
+}
+
 tdrop
 tcreate
 tdrop
@@ -175,3 +197,5 @@ tcount
 tlist
 qnext
 cexact
+echo 'ANALYZE' | psql
+cfast
