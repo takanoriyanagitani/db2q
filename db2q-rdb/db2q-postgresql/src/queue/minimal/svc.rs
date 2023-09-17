@@ -70,7 +70,7 @@ impl<T> Svc<T> {
             .await
             .map_err(|e| match e.is_closed() {
                 true => Status::unavailable(format!("connection closed: {e}")),
-                _ => Status::internal(format!("Unable to insert: {e}")),
+                _ => Status::internal(format!("Unable to count: {e}")),
             })?;
         let cnt: i64 = row
             .try_get(0)
@@ -103,7 +103,7 @@ impl<T> Svc<T> {
             .await
             .map_err(|e| match e.is_closed() {
                 true => Status::unavailable(format!("connection closed: {e}")),
-                _ => Status::internal(format!("Unable to insert: {e}")),
+                _ => Status::internal(format!("Unable to select: {e}")),
             })?
             .ok_or_else(|| {
                 Status::not_found(format!("No more queue items. previous key: {prev}"))
@@ -136,7 +136,7 @@ impl<T> Svc<T> {
             .await
             .map_err(|e| match e.is_closed() {
                 true => Status::unavailable(format!("connection closed: {e}")),
-                _ => Status::internal(format!("Unable to insert: {e}")),
+                _ => Status::internal(format!("Unable to select: {e}")),
             })?
             .ok_or_else(|| Status::not_found("Empty queue"))?;
         let next_key: i64 = row
