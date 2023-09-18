@@ -2,6 +2,8 @@ use std::env;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use db2q_postgresql::db2q::queue::st::svc::locked_q_topic_svc_new;
+
 use db2q_postgresql::deadpool_postgres;
 use db2q_postgresql::tonic;
 
@@ -49,7 +51,7 @@ async fn main() -> Result<(), String> {
 
     let t2t = db2q_postgresql::topic::minimal::topic2table::topic2table_prefix_default();
     let topic_svc = db2q_postgresql::topic::minimal::svc::topic_svc_new(&pool, t2t);
-    let topic_svr: TopicServiceServer<_> = TopicServiceServer::new(topic_svc);
+    let topic_svc_shared: Arc<_> = Arc::new(topic_svc);
 
     let t2t = db2q_postgresql::topic::minimal::topic2table::topic2table_prefix_default();
     let count_svc = db2q_postgresql::count::minimal::svc::count_svc_new(&pool, t2t);
@@ -57,9 +59,14 @@ async fn main() -> Result<(), String> {
 
     let t2t = db2q_postgresql::topic::minimal::topic2table::topic2table_prefix_default();
     let queue_svc = db2q_postgresql::queue::minimal::svc::queue_svc_new(&pool, t2t);
-    let aqsvc: Arc<_> = Arc::new(queue_svc);
+    let queue_svc_shared: Arc<_> = Arc::new(queue_svc);
 
-    let rw_q_svc: RwQueueSvc<_> = rw_q_svc_new(&aqsvc);
+    let locked_q_topic_svc = locked_q_topic_svc_new(&queue_svc_shared, &topic_svc_shared);
+    let lqts_shared: Arc<_> = Arc::new(locked_q_topic_svc);
+
+    let topic_svr: TopicServiceServer<_> = TopicServiceServer::new(lqts_shared.clone());
+
+    let rw_q_svc: RwQueueSvc<_> = rw_q_svc_new(&lqts_shared);
     let queue_svr: QueueServiceServer<_> = QueueServiceServer::new(rw_q_svc.clone());
 
     rw_q_svc

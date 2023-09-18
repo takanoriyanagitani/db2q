@@ -1,2 +1,2 @@
-pub mod fast;
 pub mod exact;
+pub mod fast;
