@@ -4,6 +4,7 @@ use tonic::{Request, Response, Status};
 
 use crate::db2q::proto::queue::v1::queue_service_server::QueueService;
 
+use crate::db2q::proto::queue::v1::q_svc::KeysRequest;
 use crate::db2q::proto::queue::v1::q_svc::{CountRequest, CountResponse};
 use crate::db2q::proto::queue::v1::q_svc::{NextRequest, NextResponse};
 use crate::db2q::proto::queue::v1::q_svc::{PopFrontRequest, PopFrontResponse};
@@ -15,6 +16,8 @@ where
     Q: Sync + Send + 'static + Deref,
     <Q as Deref>::Target: QueueService,
 {
+    type KeysStream = <<Q as Deref>::Target as QueueService>::KeysStream;
+
     async fn push_back(
         &self,
         req: Request<PushBackRequest>,
@@ -35,5 +38,9 @@ where
 
     async fn next(&self, req: Request<NextRequest>) -> Result<Response<NextResponse>, Status> {
         self.deref().next(req).await
+    }
+
+    async fn keys(&self, req: Request<KeysRequest>) -> Result<Response<Self::KeysStream>, Status> {
+        self.deref().keys(req).await
     }
 }

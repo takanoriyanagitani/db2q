@@ -183,6 +183,27 @@ cfast(){
 		db2q.proto.queue.v1.CountService/Fast
 }
 
+qkeys(){
+	jq -n -c '{
+		request_id: {
+			hi: 20230920,
+			lo: 091752,
+		},
+		topic_id: {
+			hi: 3776,
+			lo:  599,
+		},
+		max_keys: 3,
+	}' |
+	grpcurl \
+		-plaintext \
+		-d @ \
+		-import-path "${protodir}" \
+		-proto db2q/proto/queue/v1/q.proto \
+		"${listen_addr}" \
+		db2q.proto.queue.v1.QueueService/Keys
+}
+
 tdrop
 tcreate
 tdrop
@@ -199,3 +220,6 @@ qnext
 cexact
 echo 'ANALYZE' | psql
 cfast
+tpush
+tpush
+qkeys

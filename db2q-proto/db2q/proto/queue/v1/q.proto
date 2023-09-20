@@ -45,6 +45,15 @@ message QSvc {
     sfixed64 next = 1;
     bytes value = 2;
   }
+
+  message KeysRequest {
+    Uuid request_id = 1;
+    Uuid topic_id = 2;
+    fixed64 max_keys = 3;
+  }
+  message KeysResponse {
+    fixed64 key = 1;
+  }
 }
 
 message TopicSvc {
@@ -85,6 +94,7 @@ service QueueService {
 
   rpc Count(QSvc.CountRequest) returns (QSvc.CountResponse);
   rpc Next(QSvc.NextRequest) returns (QSvc.NextResponse);
+  rpc Keys(QSvc.KeysRequest) returns (stream QSvc.KeysResponse);
 }
 
 message CntSvc {

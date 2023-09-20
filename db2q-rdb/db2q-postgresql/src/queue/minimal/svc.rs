@@ -1,16 +1,25 @@
 use std::time::SystemTime;
+use tokio::sync::mpsc;
+
+use futures_util::{StreamExt, TryStreamExt};
+
+use tokio_stream::wrappers::ReceiverStream;
 
 use tonic::{Request, Response, Status};
 
 use deadpool::managed::PoolError;
+use deadpool_postgres::tokio_postgres;
 use deadpool_postgres::{Client, GenericClient, Pool};
+use tokio_postgres::{Row, RowStream};
 
 use db2q::queue::cmd::count::CountReq;
+use db2q::queue::cmd::keys::KeysReq;
 use db2q::queue::cmd::next::NextReq;
 use db2q::queue::cmd::push::PushBackReq;
 use db2q::uuid::Uuid;
 
 use db2q::db2q::proto::queue::v1::q_svc::{CountRequest, CountResponse};
+use db2q::db2q::proto::queue::v1::q_svc::{KeysRequest, KeysResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{NextRequest, NextResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{PopFrontRequest, PopFrontResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{PushBackRequest, PushBackResponse};
@@ -147,6 +156,61 @@ impl<T> Svc<T> {
             .map_err(|e| Status::internal(format!("Unable to get a value: {e}")))?;
         Ok((next_key, next_val))
     }
+
+    pub async fn keys<C>(
+        &self,
+        checked_name: &str,
+        client: &C,
+        limit: u64,
+    ) -> Result<ReceiverStream<Result<KeysResponse, Status>>, Status>
+    where
+        C: GenericClient,
+    {
+        let query = format!(
+            r#"
+                SELECT
+                    key::BIGINT
+                FROM {checked_name}
+                ORDER BY key
+                LIMIT {limit}
+            "#
+        );
+        let empty_params: Vec<i8> = vec![];
+        let row_stream: RowStream =
+            client
+                .query_raw(&query, &empty_params)
+                .await
+                .map_err(|e| match e.is_closed() {
+                    true => Status::unavailable(format!("connection closed: {e}")),
+                    _ => Status::internal(format!("Unable to get keys: {e}")),
+                })?;
+        let keys_stream = row_stream.map(|r: Result<_, _>| {
+            r.and_then(|row: Row| {
+                let key: i64 = row.try_get(0)?;
+                Ok(key)
+            })
+            .map_err(|e| Status::internal(format!("Unable to get a key: {e}")))
+            .map(|key: i64| KeysResponse { key: key as u64 })
+        });
+
+        let (tx, rx) = mpsc::channel(1);
+
+        tokio::spawn(async move {
+            let t = &tx;
+            let rslt: Result<_, _> = keys_stream
+                .try_for_each(|key: KeysResponse| async move {
+                    t.send(Ok(key))
+                        .await
+                        .map_err(|e| Status::cancelled(format!("Unable to send: {e}")))
+                })
+                .await;
+            match rslt {
+                Ok(_) => {}
+                Err(e) => log::warn!("Error while sending keys: {e}"),
+            }
+        });
+        Ok(ReceiverStream::new(rx))
+    }
 }
 
 #[tonic::async_trait]
@@ -207,6 +271,19 @@ where
             next: next_key,
             value: next_val,
         };
+        Ok(Response::new(reply))
+    }
+
+    type KeysStream = ReceiverStream<Result<KeysResponse, Status>>;
+
+    async fn keys(&self, req: Request<KeysRequest>) -> Result<Response<Self::KeysStream>, Status> {
+        let kr: KeysRequest = req.into_inner();
+        let checked: KeysReq = (&kr).try_into()?;
+        let topic_id: Uuid = checked.as_topic_id();
+        let name: String = self.topic2table.id2name(topic_id);
+        let client: Client = self.get_client().await?;
+        let keys_max: u64 = checked.as_max_keys();
+        let reply: Self::KeysStream = self.keys(name.as_str(), &client, keys_max).await?;
         Ok(Response::new(reply))
     }
 }
