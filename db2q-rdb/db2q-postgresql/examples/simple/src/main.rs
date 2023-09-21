@@ -23,6 +23,8 @@ use db2q_postgresql::topic_service_server::TopicServiceServer;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
+	env_logger::init();
+
     let listen_addr: String =
         env::var("ENV_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:50051".into());
     let listen: SocketAddr = str::parse(&listen_addr).map_err(|e| format!("Invalid addr: {e}"))?;

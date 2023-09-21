@@ -27,6 +27,7 @@ default-features = false
 features = [
     "sync",
     "rt",
+    "time",
 ]
 
 [dependencies.tokio-stream]

@@ -7,6 +7,7 @@ use crate::db2q::proto::queue::v1::queue_service_server::QueueService;
 use crate::db2q::proto::queue::v1::topic_service_server::TopicService;
 
 use crate::db2q::proto::queue::v1::q_svc::KeysRequest;
+use crate::db2q::proto::queue::v1::q_svc::WaitNextRequest;
 use crate::db2q::proto::queue::v1::q_svc::{CountRequest, CountResponse};
 use crate::db2q::proto::queue::v1::q_svc::{NextRequest, NextResponse};
 use crate::db2q::proto::queue::v1::q_svc::{PopFrontRequest, PopFrontResponse};
@@ -32,6 +33,7 @@ where
     T: Sync + Send + 'static,
 {
     type KeysStream = <Q as QueueService>::KeysStream;
+    type WaitNextStream = <Q as QueueService>::WaitNextStream;
 
     async fn push_back(
         &self,
@@ -65,6 +67,16 @@ where
         let s: &Svc<_, _> = &guard;
         let q: &Q = &s.q_svc;
         q.next(req).await
+    }
+
+    async fn wait_next(
+        &self,
+        req: Request<WaitNextRequest>,
+    ) -> Result<Response<Self::WaitNextStream>, Status> {
+        let guard = self.locked.lock().await;
+        let s: &Svc<_, _> = &guard;
+        let q: &Q = &s.q_svc;
+        q.wait_next(req).await
     }
 
     async fn keys(&self, req: Request<KeysRequest>) -> Result<Response<Self::KeysStream>, Status> {

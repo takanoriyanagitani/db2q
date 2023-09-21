@@ -1,11 +1,13 @@
-use std::time::SystemTime;
+use core::time::Duration;
+use std::time::{Instant, SystemTime};
 use tokio::sync::mpsc;
+use tokio::time::Interval;
 
 use futures_util::{StreamExt, TryStreamExt};
 
 use tokio_stream::wrappers::ReceiverStream;
 
-use tonic::{Request, Response, Status};
+use tonic::{Code, Request, Response, Status};
 
 use deadpool::managed::PoolError;
 use deadpool_postgres::tokio_postgres;
@@ -16,6 +18,7 @@ use db2q::queue::cmd::count::CountReq;
 use db2q::queue::cmd::keys::KeysReq;
 use db2q::queue::cmd::next::NextReq;
 use db2q::queue::cmd::push::PushBackReq;
+use db2q::queue::cmd::wait_next::WaitNextReq;
 use db2q::uuid::Uuid;
 
 use db2q::db2q::proto::queue::v1::q_svc::{CountRequest, CountResponse};
@@ -23,6 +26,7 @@ use db2q::db2q::proto::queue::v1::q_svc::{KeysRequest, KeysResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{NextRequest, NextResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{PopFrontRequest, PopFrontResponse};
 use db2q::db2q::proto::queue::v1::q_svc::{PushBackRequest, PushBackResponse};
+use db2q::db2q::proto::queue::v1::q_svc::{WaitNextRequest, WaitNextResponse};
 use db2q::db2q::proto::queue::v1::queue_service_server::QueueService;
 
 use super::topic2table::Topic2Table;
@@ -32,9 +36,16 @@ pub struct Svc<T> {
     topic2table: T,
 }
 
-impl<T> Svc<T> {
+impl<T> Svc<T>
+where
+    T: Send + Sync + 'static,
+{
     async fn get_client(&self) -> Result<Client, Status> {
-        match self.pool.get().await {
+        Self::pool2client(&self.pool).await
+    }
+
+    async fn pool2client(pool: &Pool) -> Result<Client, Status> {
+        match pool.get().await {
             Ok(client) => Ok(client),
             Err(PoolError::Timeout(t)) => Err(Status::unavailable(format!("timeout: {t:#?}"))),
             Err(PoolError::Closed) => Err(Status::failed_precondition("All connection closed")),
@@ -87,12 +98,7 @@ impl<T> Svc<T> {
         Ok(cnt as u64)
     }
 
-    async fn next<C>(
-        &self,
-        checked_name: &str,
-        prev: i64,
-        client: &C,
-    ) -> Result<(i64, Vec<u8>), Status>
+    async fn next<C>(checked_name: &str, prev: i64, client: &C) -> Result<(i64, Vec<u8>), Status>
     where
         C: GenericClient,
     {
@@ -124,6 +130,59 @@ impl<T> Svc<T> {
             .try_get(1)
             .map_err(|e| Status::internal(format!("Unable to get a value: {e}")))?;
         Ok((next_key, next_val))
+    }
+
+    pub async fn wait_next(
+        &self,
+        checked_name: &str,
+        req: WaitNextReq,
+    ) -> Result<ReceiverStream<Result<WaitNextResponse, Status>>, Status> {
+        let prev: i64 = req.as_previous_key().map(|u| u as i64).unwrap_or(-1);
+        let start: Instant = Instant::now();
+        let mut i: Interval = tokio::time::interval(req.as_interval());
+        let (tx, rx) = mpsc::channel(1);
+        let name: String = checked_name.into();
+        let pool: Pool = self.pool.clone();
+        tokio::spawn(async move {
+            match Self::pool2client(&pool).await {
+                Ok(client) => loop {
+                    // TODO: cancel
+                    i.tick().await; // 1st tick has 0 latency
+                    match Self::next(name.as_str(), prev, &client).await {
+                        Ok(t) => {
+                            let elapsed: Duration = start.elapsed();
+                            let (i, v) = t;
+                            let reply = WaitNextResponse {
+                                next: Some(NextResponse { next: i, value: v }),
+                                elapsed: elapsed.try_into().ok(),
+                            };
+                            match tx.send(Ok(reply)).await {
+                                Ok(_) => {}
+                                Err(e) => log::warn!("Unable to send: {e}"),
+                            };
+                            return;
+                        }
+                        Err(e) => match e.code() {
+                            Code::NotFound => continue,
+                            _ => {
+                                match tx.send(Err(e)).await {
+                                    Ok(_) => {}
+                                    Err(e) => log::warn!("Unable to send: {e}"),
+                                }
+                                return;
+                            }
+                        },
+                    }
+                },
+                Err(e) => match tx.send(Err(e)).await {
+                    Ok(_) => {}
+                    Err(e) => {
+                        log::warn!("Unable to send: {e}");
+                    }
+                },
+            }
+        });
+        Ok(ReceiverStream::new(rx))
     }
 
     async fn first<C>(&self, checked_name: &str, client: &C) -> Result<(i64, Vec<u8>), Status>
@@ -265,12 +324,26 @@ where
         let prev_key: Option<u64> = checked.as_previous_key();
         let (next_key, next_val) = match prev_key {
             None => self.first(name.as_str(), &client).await,
-            Some(prev) => self.next(name.as_str(), prev as i64, &client).await,
+            Some(prev) => Self::next(name.as_str(), prev as i64, &client).await,
         }?;
         let reply = NextResponse {
             next: next_key,
             value: next_val,
         };
+        Ok(Response::new(reply))
+    }
+
+    type WaitNextStream = ReceiverStream<Result<WaitNextResponse, Status>>;
+
+    async fn wait_next(
+        &self,
+        req: Request<WaitNextRequest>,
+    ) -> Result<Response<Self::WaitNextStream>, Status> {
+        let wnr: WaitNextRequest = req.into_inner();
+        let checked: WaitNextReq = (&wnr).try_into()?;
+        let topic_id: Uuid = checked.as_topic_id();
+        let name: String = self.topic2table.id2name(topic_id);
+        let reply: Self::WaitNextStream = self.wait_next(name.as_str(), checked).await?;
         Ok(Response::new(reply))
     }
 

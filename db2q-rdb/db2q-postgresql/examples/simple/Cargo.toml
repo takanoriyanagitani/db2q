@@ -6,6 +6,15 @@ edition = "2021"
 [dependencies.db2q-postgresql]
 path = "../.."
 
+[dependencies.env_logger]
+version = "0.10.0"
+default-features = false
+features = [
+	"auto-color",
+	"humantime",
+	"regex",
+]
+
 [dependencies.tokio]
 version = "1"
 features = [
