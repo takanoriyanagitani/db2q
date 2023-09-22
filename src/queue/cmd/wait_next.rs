@@ -34,14 +34,19 @@ fn get_interval_minimum() -> Duration {
             let mo: &mut Option<Duration> = &mut guard;
             match mo {
                 Some(d) => *d,
-                None => {
-                    let ds: Option<String> = env::var(INTERVAL_MINIMUM_KEY).ok();
-                    let di: Option<u64> = ds.and_then(|os| str::parse(os.as_str()).ok());
-                    let od: Option<Duration> = di.map(Duration::from_nanos);
-                    let d: Duration = od.unwrap_or(INTERVAL_MINIMUM_DEFAULT);
-                    mo.replace(d);
-                    d
-                }
+                None => env::var(INTERVAL_MINIMUM_KEY)
+                    .map_err(|_| Status::not_found("no interval minimum set"))
+                    .and_then(|s: String| {
+                        let u: u64 = str::parse(s.as_str()).map_err(|e| {
+                            Status::invalid_argument(format!("invalid interval integer: {e}"))
+                        })?;
+                        let d: Duration = Duration::from_nanos(u);
+                        Ok(d)
+                    })
+                    .unwrap_or_else(|e| {
+                        log::warn!("Invalid interval ignored: {e}");
+                        INTERVAL_MINIMUM_DEFAULT
+                    }),
             }
         }
     })
@@ -95,6 +100,7 @@ impl TryFrom<&WaitNextRequest> for WaitNextReq {
             ..=-1 => None,
         };
         let imin: Duration = get_interval_minimum();
+        log::debug!("minimum interval: {imin:#?}"); // log only(hides minimum from clients)
         let interval: Duration = match g.interval.clone() {
             None => INTERVAL_DEFAULT,
             Some(i) => Duration::try_from(i).ok().unwrap_or(INTERVAL_DEFAULT),

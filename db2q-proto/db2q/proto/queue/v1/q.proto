@@ -57,6 +57,7 @@ message QSvc {
   message WaitNextResponse {
     NextResponse next = 1;
     google.protobuf.Duration elapsed = 2;
+    fixed64 retried = 3;
   }
 
   message KeysRequest {

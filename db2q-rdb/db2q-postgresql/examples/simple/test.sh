@@ -214,8 +214,8 @@ wnext(){
 			hi: 3776,
 			lo:  599,
 		},
-		previous: 8,
-		interval: "1ns",
+		previous: 5,
+		interval: "500us",
 		timeout: "1000ms",
 	}' |
 	grpcurl \
@@ -247,4 +247,8 @@ cfast
 tpush
 tpush
 qkeys
-wnext
+wnext &
+sleep 0.5
+echo "INSERT INTO t0000000000000ec00000000000000257(val) VALUES('')" | psql
+
+wait

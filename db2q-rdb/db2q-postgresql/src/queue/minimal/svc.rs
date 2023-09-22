@@ -145,13 +145,16 @@ where
         let pool: Pool = self.pool.clone();
         let timeout: Duration = req.as_timeout();
         tokio::spawn(async move {
+            let mut retry_cnt: u64 = 0;
             match Self::pool2client(&pool).await {
                 Ok(client) => loop {
                     let check: Duration = start.elapsed();
                     match check < timeout {
                         true => {}
                         false => {
-                            let e = Status::deadline_exceeded("timeout");
+                            let e = Status::deadline_exceeded(format!(
+                                "timeout. table={name}, retried={retry_cnt}"
+                            ));
                             match tx.send(Err(e)).await {
                                 Ok(_) => {}
                                 Err(e) => log::warn!("Unable to send: {e}"),
@@ -167,6 +170,7 @@ where
                             let reply = WaitNextResponse {
                                 next: Some(NextResponse { next: i, value: v }),
                                 elapsed: elapsed.try_into().ok(),
+                                retried: retry_cnt,
                             };
                             match tx.send(Ok(reply)).await {
                                 Ok(_) => {}
@@ -175,7 +179,10 @@ where
                             return;
                         }
                         Err(e) => match e.code() {
-                            Code::NotFound => continue,
+                            Code::NotFound => {
+                                retry_cnt += 1;
+                                continue;
+                            }
                             _ => {
                                 match tx.send(Err(e)).await {
                                     Ok(_) => {}
