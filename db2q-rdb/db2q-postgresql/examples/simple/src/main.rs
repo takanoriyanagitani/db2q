@@ -23,7 +23,11 @@ use db2q_postgresql::topic_service_server::TopicServiceServer;
 
 #[tokio::main]
 async fn main() -> Result<(), String> {
-	env_logger::init();
+    env_logger::Builder::new()
+        .default_format()
+        .parse_default_env()
+        .format_timestamp_micros()
+        .init();
 
     let listen_addr: String =
         env::var("ENV_LISTEN_ADDR").unwrap_or_else(|_| "127.0.0.1:50051".into());

@@ -215,7 +215,8 @@ wnext(){
 			lo:  599,
 		},
 		previous: 8,
-		interval: "1s",
+		interval: "1ms",
+		timeout: "1000ms",
 	}' |
 	grpcurl \
 		-plaintext \

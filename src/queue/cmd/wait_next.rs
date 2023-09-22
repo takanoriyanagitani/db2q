@@ -7,12 +7,14 @@ use crate::uuid::Uuid;
 use crate::db2q::proto::queue::v1::q_svc::WaitNextRequest;
 
 pub const INTERVAL_DEFAULT: Duration = Duration::from_millis(1000);
+pub const TIMEOUT_DEFAULT: Duration = Duration::from_millis(2000);
 
 pub struct WaitNextReq {
     request_id: Uuid,
     topic_id: Uuid,
     previous: Option<u64>,
     interval: Duration,
+    timeout: Duration,
 }
 
 impl WaitNextReq {
@@ -30,6 +32,10 @@ impl WaitNextReq {
 
     pub fn as_interval(&self) -> Duration {
         self.interval
+    }
+
+    pub fn as_timeout(&self) -> Duration {
+        self.timeout
     }
 }
 
@@ -50,9 +56,13 @@ impl TryFrom<&WaitNextRequest> for WaitNextReq {
             })?),
             ..=-1 => None,
         };
-		// TODO: limit minimum duration(e.g, no less than 1 ms)
+        // TODO: limit minimum duration(e.g, no less than 1 ms)
         let interval: Duration = match g.interval.clone() {
             None => INTERVAL_DEFAULT,
+            Some(i) => Duration::try_from(i).ok().unwrap_or(INTERVAL_DEFAULT),
+        };
+        let timeout: Duration = match g.timeout.clone() {
+            None => TIMEOUT_DEFAULT,
             Some(i) => Duration::try_from(i).ok().unwrap_or(INTERVAL_DEFAULT),
         };
         Ok(Self {
@@ -60,6 +70,7 @@ impl TryFrom<&WaitNextRequest> for WaitNextReq {
             topic_id,
             previous,
             interval,
+            timeout,
         })
     }
 }

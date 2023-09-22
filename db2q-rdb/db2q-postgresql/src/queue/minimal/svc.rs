@@ -143,10 +143,22 @@ where
         let (tx, rx) = mpsc::channel(1);
         let name: String = checked_name.into();
         let pool: Pool = self.pool.clone();
+        let timeout: Duration = req.as_timeout();
         tokio::spawn(async move {
             match Self::pool2client(&pool).await {
                 Ok(client) => loop {
-                    // TODO: cancel
+                    let check: Duration = start.elapsed();
+                    match check < timeout {
+                        true => {}
+                        false => {
+                            let e = Status::deadline_exceeded("timeout");
+                            match tx.send(Err(e)).await {
+                                Ok(_) => {}
+                                Err(e) => log::warn!("Unable to send: {e}"),
+                            }
+                            return;
+                        }
+                    }
                     i.tick().await; // 1st tick has 0 latency
                     match Self::next(name.as_str(), prev, &client).await {
                         Ok(t) => {

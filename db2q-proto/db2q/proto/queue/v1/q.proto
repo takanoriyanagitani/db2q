@@ -51,7 +51,8 @@ message QSvc {
     Uuid request_id = 1;
     Uuid topic_id = 2;
     sfixed64 previous = 3; // use negative integer to get the first item
-    google.protobuf.Duration interval = 4;
+    google.protobuf.Duration interval = 4; // polling interval
+    google.protobuf.Duration timeout = 5;
   }
   message WaitNextResponse {
     NextResponse next = 1;
